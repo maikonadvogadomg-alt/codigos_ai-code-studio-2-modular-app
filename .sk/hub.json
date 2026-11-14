@@ -1,0 +1,17 @@
+{
+  "titulo": "codigos_ai-code-studio-2-modular",
+  "arquivo": "index.html",
+  "itens": [
+    {
+      "path": "ai-code-studio-2-modular/index.html",
+      "nome": "AI Code Studio",
+      "desc": "",
+      "on": true,
+      "icone": "ai-code-studio-2-modular/icons/icon.svg"
+    }
+  ],
+  "sub": "",
+  "logo": "",
+  "tema": "dourado",
+  "links": []
+}

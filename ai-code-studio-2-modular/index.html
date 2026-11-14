@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AI Code Studio</title>
+<link rel="stylesheet" href="css/01-estilo.css">
+  <!-- PWA:inicio (gerado pelo Mini SK — pode refazer no painel 📱 PWA) -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#56876a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AI Code Studio">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script>
+    if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+      addEventListener('load', function () { navigator.serviceWorker.register('service-worker.js').catch(function (e) { console.warn('Service worker:', e); }); });
+    }
+  </script>
+  <!-- PWA:fim -->
+</head>
+<body>
+
+<!-- ======================= HEADER ======================= -->
+<div class="header">
+  <button class="btn icon" onclick="MODULE_UI.toggleSidebar()" title="Conversas">☰</button>
+  <h1>🤖<span class="full"> AI Code Studio</span></h1>
+  <div class="hscroll">
+    <select id="aiProvider" onchange="MODULE_Provider.onProviderChange()" title="Provedor de IA"></select>
+    <select id="modelSelect" onchange="MODULE_Provider.onModelChange()" title="Modelo"></select>
+    <button class="btn icon" onclick="MODULE_Provider.refreshModels()" title="Buscar lista atualizada de modelos na API">🔄</button>
+    <span class="spacer"></span>
+    <button class="btn icon" onclick="MODULE_Chat.confirmNewChat()" title="Novo chat">＋</button>
+    <button class="btn icon" id="codeBtn" onclick="MODULE_Code.togglePanel()" title="Editor de código">💻</button>
+    <button class="btn icon" id="brainBtn" onclick="MODULE_Brain.toggle()" title="Cérebro / memória">🧠</button>
+    <button class="btn icon" onclick="MODULE_Settings.open()" title="Configurações">⚙️</button>
+  </div>
+  <button class="btn icon" id="menuBtn" onclick="MODULE_UI.toggleMenu()" title="Mais">⋯</button>
+  <div class="menu" id="menu">
+    <button class="btn" onclick="MODULE_UI.toggleMenu();MODULE_Storage.exportAll()">💾 Exportar backup completo</button>
+    <button class="btn" onclick="MODULE_UI.toggleMenu();MODULE_Storage.importBackup()">📂 Importar backup</button>
+    <button class="btn" onclick="MODULE_UI.toggleMenu();MODULE_Chat.exportConvMarkdown()">📝 Baixar conversa (.md)</button>
+    <button class="btn" onclick="MODULE_UI.toggleMenu();MODULE_Settings.test()">🧪 Testar IA selecionada</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- ======================= SIDEBAR ======================= -->
+  <div class="sidebar panel" id="sidebar">
+    <div class="side-head">
+      <input type="search" id="convSearch" placeholder="🔍 Buscar conversa" oninput="MODULE_Chat.renderConversations()">
+      <button class="btn icon" onclick="MODULE_Chat.confirmNewChat()" title="Novo chat">＋</button>
+      <button class="btn icon" onclick="MODULE_UI.toggleSidebar()" title="Fechar">✕</button>
+    </div>
+    <div class="conversations" id="convList"></div>
+  </div>
+
+  <!-- ======================= CHAT ======================= -->
+  <div class="chat-area">
+    <div class="chat-toolbar">
+      <input class="conv-title-edit" id="convTitleEdit" value="Nova Conversa" onblur="MODULE_Chat.renameConv(this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+      <button class="btn sm" id="stopVoiceBtn" onclick="MODULE_Voice.stopSpeaking()" title="Parar leitura em voz">🔇</button>
+      <div class="context-info" title="Tokens estimados enviados à IA / limite">
+        <span id="tokenCount">0</span>tk
+        <div class="context-bar"><div class="context-fill" id="contextFill" style="width:0%"></div></div>
+      </div>
+      <button class="btn sm" onclick="MODULE_Context.compactNow()" title="Resumir mensagens antigas (a IA não esquece, e economiza contexto)">📋</button>
+      <button class="btn sm" onclick="MODULE_Brain.memorizeConversation()" title="Salvar esta conversa no cérebro">🧠</button>
+      <button class="btn sm" onclick="MODULE_Context.clear()" title="Apagar mensagens desta conversa">✂️</button>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="input-area">
+      <div class="input-options">
+        <label title="Pesquisar na web (Serper) antes de responder"><input type="checkbox" id="webSearchCheck"> 🌐 Web</label>
+        <label title="Ler as respostas em voz alta"><input type="checkbox" id="autoReadCheck" onchange="MODULE_Settings.quick('autoRead',this.checked)"> 🔊 Ler respostas</label>
+        <label title="Criatividade">🌡️
+          <input type="range" min="0" max="2" step="0.1" value="0.7" id="tempSlider" style="width:70px;accent-color:var(--accent)"
+                 oninput="document.getElementById('tempVal').textContent=this.value;MODULE_Settings.quick('temperature',+this.value)">
+          <span id="tempVal">0.7</span></label>
+        <label title="Tamanho máximo da resposta">📏
+          <input type="number" id="maxTokens" value="8192" min="256" max="128000" step="256" style="width:82px" onchange="MODULE_Settings.quick('maxTokens',+this.value)"></label>
+      </div>
+      <div class="input-row">
+        <button class="btn icon" id="micBtn" onclick="MODULE_Voice.toggleMic()" title="Falar (ditado)">🎤</button>
+        <button class="btn icon" id="convBtn" onclick="MODULE_Voice.toggleConvMode()" title="Modo conversa por voz (fala ↔ ouve)">🗣️</button>
+        <textarea class="input-box" id="userInput" rows="1" placeholder="Mensagem... (Ctrl+Enter envia)" onkeydown="MODULE_UI.handleKey(event)" oninput="MODULE_UI.autoResize(this)"></textarea>
+        <button class="btn icon" onclick="document.getElementById('fileAttach').click()" title="Anexar arquivo de código/texto na mensagem">📎</button>
+        <button class="btn primary" onclick="MODULE_Chat.sendOrStop()" id="sendBtn">Enviar ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= CÓDIGO ======================= -->
+  <div class="code-panel panel" id="codePanel">
+    <div class="code-panel-header">
+      <h3>💻 Editor</h3>
+      <button class="btn sm" onclick="MODULE_Code.newTab()">+ Aba</button>
+      <button class="btn sm" onclick="MODULE_Code.importFile()" title="Importar arquivos (HTML, JS, CSS, PY...)">📂 Importar</button>
+      <button class="btn sm" id="previewBtn" onclick="MODULE_Code.togglePreview()" title="Prévia ao vivo">👁️ Prévia</button>
+      <button class="btn sm" onclick="MODULE_Code.toggleWide()" title="Aumentar/diminuir painel">⇔</button>
+      <button class="btn sm" onclick="MODULE_Code.togglePanel()" title="Fechar">✕</button>
+    </div>
+    <div class="code-tabs" id="codeTabs"></div>
+    <div class="editor-split">
+      <textarea class="code-editor" id="codeEditor" spellcheck="false" autocapitalize="off" autocomplete="off"
+        placeholder="// Cole ou escreva código aqui..." oninput="MODULE_Code.onInput()" onkeydown="MODULE_Code.onKey(event)"></textarea>
+      <div class="preview-wrap hidden" id="previewWrap">
+        <div class="preview-bar">
+          <label><input type="checkbox" id="liveCheck" checked> ao vivo</label>
+          <label title="Junta a aba HTML + todas as abas CSS + todas as abas JS numa página só"><input type="checkbox" id="combineCheck" onchange="MODULE_Code.refreshPreview()"> 🧩 combinar abas</label>
+          <span style="margin-left:auto"></span>
+          <button class="btn sm" onclick="MODULE_Code.refreshPreview()">↻</button>
+          <button class="btn sm" onclick="MODULE_Code.openWindow()" title="Abrir em nova janela">↗</button>
+        </div>
+        <iframe id="previewFrame" sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe>
+      </div>
+    </div>
+    <div class="code-actions">
+      <button class="btn success sm" onclick="MODULE_Code.copyClean()">📋 Copiar</button>
+      <button class="btn sm" onclick="MODULE_Code.pasteToEditor()">📥 Colar</button>
+      <button class="btn sm" onclick="MODULE_Code.sendToChat()">💬 Enviar ao chat</button>
+      <button class="btn sm" onclick="MODULE_Code.download()">⬇️ Baixar</button>
+      <button class="btn danger sm" onclick="MODULE_Code.clear()">🗑️</button>
+      <select id="codeLang" style="font-size:11px;margin-left:auto;min-height:28px" onchange="MODULE_Code.onLangChange()">
+        <option value="html">HTML</option><option value="css">CSS</option><option value="javascript">JS</option>
+        <option value="typescript">TS</option><option value="python">Python</option><option value="json">JSON</option>
+        <option value="java">Java</option><option value="csharp">C#</option><option value="cpp">C/C++</option>
+        <option value="php">PHP</option><option value="sql">SQL</option><option value="rust">Rust</option>
+        <option value="go">Go</option><option value="bash">Bash</option><option value="markdown">Markdown</option><option value="text">Texto</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ======================= CÉREBRO ======================= -->
+  <div class="brain-panel panel" id="brainPanel">
+    <div class="brain-header">
+      <h3>🧠 Cérebro (<span id="memCount">0</span>)</h3>
+      <button class="btn sm" onclick="MODULE_Brain.toggle()">✕</button>
+    </div>
+    <div class="brain-info">📌 Fixas vão <b>sempre</b> para a IA. As outras entram pelas mais relevantes à pergunta (quantidade em ⚙️).</div>
+    <div style="padding:8px 8px 0"><input type="search" id="memSearch" placeholder="🔍 Buscar memória" style="width:100%" oninput="MODULE_Brain.render()"></div>
+    <div class="brain-content" id="brainContent"></div>
+    <div class="brain-actions">
+      <button class="btn warn sm" onclick="MODULE_Brain.addManual()">+ Memória</button>
+      <button class="btn sm" onclick="MODULE_Brain.memorizeConversation()">🧠 Memorizar conversa</button>
+      <button class="btn sm" onclick="MODULE_Brain.exportMemory()">💾 Backup</button>
+      <button class="btn sm" onclick="MODULE_Brain.importMemory()">📂 Restaurar</button>
+      <button class="btn danger sm" onclick="MODULE_Brain.clearAll()">🗑️</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL CONFIG ======================= -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <h2>⚙️ Configurações</h2>
+
+    <div class="section-title">🔑 Chaves de API (ficam só neste navegador)</div>
+    <div id="keysContainer"></div>
+    <div class="form-group">
+      <label>🌐 Serper (pesquisa web) — serper.dev</label>
+      <div class="api-row"><input type="password" id="serperKeyInput" autocomplete="off"><button class="btn" type="button" onclick="MODULE_UI.togglePass('serperKeyInput')">👁️</button></div>
+    </div>
+    <div class="grid2">
+      <div class="form-group"><label>🏠 Ollama URL</label><input type="text" id="ollamaUrl" placeholder="http://localhost:11434"></div>
+      <div class="form-group"><label>🔧 URL base "Personalizado" (compatível OpenAI)</label><input type="text" id="customBase" placeholder="https://.../v1"></div>
+    </div>
+    <p class="hint">Gemini: aceita chave antiga (AIza...) e nova (AQ....). O app tenta automaticamente os 3 formatos de autenticação e lembra o que funcionou. Use 🔄 no topo para puxar os modelos atuais de cada provedor.</p>
+
+    <div class="section-title">🧠 Contexto e Cérebro</div>
+    <div class="form-group">
+      <label>Limite de contexto enviado (tokens estimados)</label>
+      <div class="range-row"><input type="range" min="2000" max="400000" step="1000" id="contextLimit" oninput="document.getElementById('ctxVal').textContent=this.value"><span class="range-val" id="ctxVal">32000</span></div>
+      <p class="hint">IA mais forte (Gemini Pro, Claude, GPT) aguenta 100 mil+. Modelos locais/pequenos: 8–16 mil.</p>
+    </div>
+    <div class="grid2">
+      <div class="form-group"><label>Memórias injetadas por pergunta</label><input type="number" id="memoryInjectCount" min="0" max="50"></div>
+      <div class="form-group"><label>Mensagens recentes mantidas inteiras</label><input type="number" id="keepRecent" min="2" max="60"></div>
+    </div>
+    <div class="form-group"><label class="check"><input type="checkbox" id="autoSummarize"> Resumir automaticamente mensagens antigas quando o contexto encher (evita a IA "esquecer")</label></div>
+    <div class="form-group"><label class="check"><input type="checkbox" id="enterSends"> Enter envia (Shift+Enter quebra linha)</label></div>
+
+    <div class="section-title">🔊 Voz</div>
+    <div class="form-group">
+      <label>Voz (⭐ = neural/natural — no Microsoft Edge aparecem Francisca e Antonio)</label>
+      <div class="api-row"><select id="voiceSelect"></select><button class="btn" type="button" onclick="MODULE_Voice.test()">▶ Testar</button></div>
+    </div>
+    <div class="grid2">
+      <div class="form-group"><label>Velocidade <span id="rateVal"></span></label><input type="range" min="0.5" max="2" step="0.05" id="voiceRate" style="width:100%;accent-color:var(--accent)" oninput="document.getElementById('rateVal').textContent=this.value"></div>
+      <div class="form-group"><label>Tom <span id="pitchVal"></span></label><input type="range" min="0.5" max="2" step="0.05" id="voicePitch" style="width:100%;accent-color:var(--accent)" oninput="document.getElementById('pitchVal').textContent=this.value"></div>
+    </div>
+    <div class="form-group"><label class="check"><input type="checkbox" id="voiceAutoSend"> Enviar automaticamente quando eu parar de falar (🎤)</label></div>
+
+    <div class="section-title">🤖 Comportamento</div>
+    <div class="form-group"><label>System Prompt</label><textarea id="systemPrompt" style="min-height:140px"></textarea>
+      <button class="btn sm" type="button" style="margin-top:4px" onclick="document.getElementById('systemPrompt').value=DEFAULT_SYS">Restaurar padrão</button></div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="MODULE_Settings.test()">🧪 Testar IA</button>
+      <button class="btn" onclick="MODULE_Settings.close()">Cancelar</button>
+      <button class="btn primary" onclick="MODULE_Settings.save()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL NOVO CHAT ======================= -->
+<div class="modal-overlay" id="newChatModal">
+  <div class="modal">
+    <h2>＋ Novo Chat</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">O que fazer com a conversa atual?</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn success" onclick="MODULE_Chat.newChatAction('save')">💾 Manter a conversa salva e abrir novo chat</button>
+      <button class="btn primary" onclick="MODULE_Chat.newChatAction('both')">✅ Manter conversa + criar memória no cérebro</button>
+      <button class="btn warn" onclick="MODULE_Chat.newChatAction('memory')">🧠 Só guardar como memória (apaga a conversa)</button>
+      <button class="btn danger" onclick="MODULE_Chat.newChatAction('discard')">🗑️ Descartar conversa</button>
+      <button class="btn" onclick="MODULE_Chat.closeNewChatModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL MEMÓRIA ======================= -->
+<div class="modal-overlay" id="memoryModal">
+  <div class="modal">
+    <h2 id="memoryModalTitle">🧠 Adicionar Memória</h2>
+    <div class="form-group"><label>Conteúdo</label><textarea id="memoryContent" style="min-height:140px" placeholder="Ex: O projeto é um app jurídico em HTML modular; usar sempre Gemini 2.5 Pro para código grande..."></textarea></div>
+    <div class="form-group"><label>Etiquetas (separadas por vírgula)</label><input type="text" id="memoryTags" placeholder="projeto, código, preferência"></div>
+    <div class="grid2">
+      <div class="form-group"><label>Vale para</label><select id="memoryScope"><option value="global">🌍 Todas as conversas</option><option value="conv">💬 Só esta conversa</option></select></div>
+      <div class="form-group"><label>&nbsp;</label><label class="check"><input type="checkbox" id="memoryPinned"> 📌 Fixa (sempre enviada)</label></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="MODULE_Brain.closeMemoryModal()">Cancelar</button>
+      <button class="btn primary" onclick="MODULE_Brain.saveManual()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<input type="file" id="fileImportCode" class="hidden" multiple accept=".html,.htm,.js,.mjs,.jsx,.ts,.tsx,.css,.py,.java,.cs,.cpp,.c,.h,.php,.sql,.txt,.json,.md,.rs,.go,.sh,.xml,.svg,.vue" onchange="MODULE_Code.handleFileImport(event)">
+<input type="file" id="fileImportBackup" class="hidden" accept=".json" onchange="MODULE_Storage.handleImport(event)">
+<input type="file" id="fileImportMemory" class="hidden" accept=".json" onchange="MODULE_Brain.handleImport(event)">
+<input type="file" id="fileAttach" class="hidden" multiple onchange="MODULE_Chat.handleAttach(event)">
+
+<script src="js/01-utilitarios.js"></script>
+<script src="js/02-renderizacao-de-mensagens-mark.js"></script>
+<script src="js/03-editor-de-codigo-previa-ao-viv.js"></script>
+<script src="js/04-inicializacao.js"></script>
+<script src="js/05-utilitarios.js"></script>
+<script src="js/06-provedores-de-ia.js"></script>
+<script src="js/07-estado.js"></script>
+<script src="js/08-armazenamento.js"></script>
+<script src="js/09-selecao-de-provedor-modelo.js"></script>
+<script src="js/10-chamadas-de-ia.js"></script>
+<script src="js/11-contexto-a-ia-nao-caducar.js"></script>
+<script src="js/12-cerebro-memoria.js"></script>
+<script src="js/13-renderizacao-de-mensagens-mark.js"></script>
+<script src="js/14-chat.js"></script>
+<script src="js/15-editor-de-codigo-previa-ao-viv.js"></script>
+<script src="js/16-voz-tts-neural-ditado-modo-con.js"></script>
+<script src="js/17-configuracoes.js"></script>
+<script src="js/18-ui.js"></script>
+<script src="js/19-inicializacao.js"></script>
+</body>
+</html>
